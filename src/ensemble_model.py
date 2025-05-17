@@ -1,5 +1,6 @@
 import numpy as np
 from numpy.ma.core import anomalies
+from scipy.stats import median_abs_deviation
 from sklearn.ensemble import IsolationForest
 import shap
 
@@ -96,7 +97,8 @@ class ZScoreModel:
         self.feature_columns = None
         self._key = "z_score"
 
-    def check_anomaly_zscore(self, data):
+    @staticmethod
+    def check_anomaly_zscore(data):
         mean = np.mean(np.asarray(data, dtype=float))
         std = np.std(np.asarray(data, dtype=float))
         z_score = (np.array(data, dtype=float) - mean) / std
@@ -110,14 +112,31 @@ class ZScoreModel:
 
         return anomalies_
 
+    @staticmethod
+    def check_anomaly_robust_zscore(data):
+        data = np.asarray(data, dtype=float)
+        median = np.median(data)
+        mad = median_abs_deviation(data, scale='normal')  # scale='normal' makes it comparable to std dev
+
+        # Avoid division by zero if MAD is 0
+        if mad == 0:
+            return [0] * len(data)
+
+        robust_z_scores = (data - median) / mad
+        threshold = 3
+        anomalies_ = [1 if abs(z) > threshold else 0 for z in robust_z_scores]
+
+        return anomalies_
+
     def get_key(self):
         return self._key
 
     def calculate_z_values(self, anomaly_monad: AnomalyEnsembleMonad):
         df = anomaly_monad.data_frame
+        self.feature_columns = anomaly_monad.features
 
         for col in self.feature_columns:
-            anomalies_ = self.check_anomaly_zscore(df[col])
+            anomalies_ = self.check_anomaly_robust_zscore(df[col])
             df[f"{col}_{self._key}"] = anomalies_
 
         return df
