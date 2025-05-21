@@ -50,9 +50,6 @@ def apply_softmax_transformation(row, features):
     return res
 
 
-
-
-
 class IsolationForestModel:
 
     def __init__(self, model: IsolationForest):
@@ -140,6 +137,39 @@ class ZScoreModel:
             df[f"{col}_{self._key}"] = anomalies_
 
         return df
+
+
+class IqrModel:
+    def __init__(self, threshold: float):
+        self.feature_columns = None
+        self.feature_matrix = None
+        self.threshold = threshold
+
+
+    def calculate_iqr_values(self, anomaly_monad: AnomalyEnsembleMonad):
+        df = anomaly_monad.data_frame
+        self.feature_columns = anomaly_monad.features
+
+        for col in self.feature_columns:
+            column_data = df[col].astype(float)
+            lower_bound, upper_bound, value = self.get_iqr_values(column_data)
+
+            if value < lower_bound or value > upper_bound:
+                df[f"{col}_anomalies_by_quartile"] = 1
+            else:
+                df[f"{col}_anomalies_by_quartile"] = 0
+
+        return df
+
+    def get_iqr_values(self, column_data):
+        q1 = column_data.quantile(0.25)
+        q3 = column_data.quantile(0.75)
+        iqr = q3 - q1
+        lower_bound = q1 - self.threshold * iqr
+        upper_bound = q3 + self.threshold * iqr
+        value = column_data[0]
+        return lower_bound, upper_bound, value
+
 
 
 
